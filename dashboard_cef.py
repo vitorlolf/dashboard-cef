@@ -6,12 +6,105 @@ import dash_bootstrap_components as dbc
 import io
 import base64
 import os
+import webbrowser
 from login import layout_login
 
-df = pd.DataFrame()
+API_TOKEN = ("eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJQaXBlZnkiLCJpYXQiOjE3NDMxMDEwOTAsImp0aSI6ImVlZmVlM2Q1LTQzM2EtNGJlOS04MmVjLWFiMDBhNzgzMmIxZCIsInN1YiI6MzA1ODYwNjQ0LCJ1c2VyIjp7ImlkIjozMDU4NjA2NDQsImVtYWlsIjoidml0b3IuZnJhbmNvQHNlcmdlcy5vcmcifX0.7t8mcnmeeEYF7NUPeYOohLfGU2hiN7s47oUJN7-4mElzdnGHWyIFCW3H1TFhB66k63PAuaiF8Z4QptIoUjNfEg")
+phases = [
+    {"id": 334867668, "name": "Em Aberto"},
+    {"id": 334867669, "name": "Em Captação"},
+    {"id": 334867674, "name": "Cadastro Médico"},
+    {"id": 334867670, "name": "Aguardando Agenda"},
+    {"id": 334867673, "name": "Confirmação CEF"},
+    {"id": 334867671, "name": "Aguardando/Em Atendimento"},
+    {"id": 334867678, "name": "Cancelado/Reagendado"},
+    {"id": 334867672, "name": "Atendimento Realizado"},
+    {"id": 334867677, "name": "Conferência do Atendimento"},
+    {"id": 334867683, "name": "Liberado para Pagamento"},
+    {"id": 334867675, "name": "NF Solicitada"},
+    {"id": 334867679, "name": "NF recebida"},
+    {"id": 334867680, "name": "Pagamento realizado"},
+    {"id": 334867676, "name": "Excluído da Previsão"},
+]
+
+def coletar_dados():
+    print("🔄 Iniciando coleta de dados...")
+    url = "https://api.pipefy.com/graphql"
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
+    todos_os_registros = []
+
+    for fase in phases:
+        print(f"🔍 Coletando fase: {fase['name']}")
+        has_next_page = True
+        end_cursor = None
+
+        while has_next_page:
+            after_clause = f', after: "{end_cursor}"' if end_cursor else ''
+            query = f"""
+            {{
+              phase(id: {fase['id']}) {{
+                name
+                cards(first: 100{after_clause}) {{
+                  pageInfo {{ hasNextPage endCursor }}
+                  edges {{
+                    node {{
+                      title
+                      createdAt
+                      current_phase {{ name }}
+                      fields {{ name value }}
+                    }}
+                  }}
+                }}
+              }}
+            }}
+            """
+
+            response = requests.post(url, json={"query": query}, headers=headers)
+            try:
+                cards_data = response.json()["data"]["phase"]["cards"]
+            except KeyError:
+                print("❌ A resposta da API NÃO contém 'data'. Veja o conteúdo completo:")
+                print(response.json())
+                return pd.DataFrame()
+
+            cards = cards_data["edges"]
+
+            for card in cards:
+                node = card["node"]
+                registro = {
+                    "Título": node["title"],
+                    "Fase Atual": node["current_phase"]["name"],
+                    "Fase de Origem": fase["name"]
+                }
+                for campo in node["fields"]:
+                    nome = campo["name"]
+                    valor = campo["value"]
+                    registro[nome] = valor
+                    if nome == "EPS Previstos":
+                        try:
+                            eps_valor = float(valor)
+                            registro["EPS Previstos (Fase Inicial)"] = eps_valor
+                        except:
+                            registro["EPS Previstos (Fase Inicial)"] = None
+                todos_os_registros.append(registro)
+
+            has_next_page = cards_data["pageInfo"]["hasNextPage"]
+            end_cursor = cards_data["pageInfo"]["endCursor"]
+
+        print(f"✅ Fase coletada: {fase['name']}")
+
+    print(f"\n✅ Total geral de cards coletados: {len(todos_os_registros)}\n")
+    df = pd.DataFrame(todos_os_registros)
+
+    for col in ["EPS Previstos", "EPS Realizados", "EPS Previstos (Fase Inicial)"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    return df
+
+df = coletar_dados()
 
 app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
-app.title = "Meu App"
 server = app.server
 
 app.layout = html.Div([
@@ -23,7 +116,7 @@ layout_dashboard = html.Div([
     html.Div([
         html.H1("DASHBOARD - EPS CEF 2025", style={"textAlign": "center", "color": "white"}),
         html.Div(
-            html.A("📅 Baixar Excel", id="download-link", download="dados_filtrados.xlsx", href="", target="_blank",
+            html.A("📥 Baixar Excel", id="download-link", download="dados_filtrados.xlsx", href="", target="_blank",
                    style={
                        "padding": "8px 16px",
                        "backgroundColor": "#1e1e1e",
@@ -41,8 +134,8 @@ layout_dashboard = html.Div([
     html.Div([
         dash_table.DataTable(
             id='tabela-dados',
-            columns=[],
-            data=[],
+            columns=[{"name": i, "id": i} for i in df.columns if i not in ["Data de Criação"]],
+            data=df.to_dict('records'),
             page_size=10,
             filter_action="native",
             style_table={"overflowX": "auto"},
@@ -53,12 +146,12 @@ layout_dashboard = html.Div([
         html.Div([
             html.Div([
                 html.Label("PERÍODO", style={"fontWeight": "bold", "textTransform": "uppercase", "color": "white", "fontSize": "12px"}),
-                dcc.Dropdown(id="filtro-periodo", multi=True, style={"fontSize": "12px"})
+                dcc.Dropdown(id="filtro-periodo", options=[{"label": p, "value": p} for p in sorted(df["Período"].dropna().unique())] if "Período" in df.columns else [], multi=True, style={"fontSize": "12px"})
             ], style={"width": "200px", "margin": "0 10px"}),
 
             html.Div([
                 html.Label("REGIÃO", style={"fontWeight": "bold", "textTransform": "uppercase", "color": "white", "fontSize": "12px"}),
-                dcc.Dropdown(id="filtro-estado", multi=True, style={"fontSize": "12px"})
+                dcc.Dropdown(id="filtro-estado", options=[{"label": e, "value": e} for e in sorted(df["Estado"].dropna().unique())] if "Estado" in df.columns else [], multi=True, style={"fontSize": "12px"})
             ], style={"width": "200px", "margin": "0 10px"})
         ], style={"display": "flex", "justifyContent": "center"})
     ]),
@@ -89,9 +182,6 @@ def autenticar(n, usuario, senha):
     Input("filtro-periodo", "value")
 )
 def atualizar_graficos(estados, periodos):
-    if df.empty:
-        return {}, {}, "Dados ainda não carregados."
-
     df_filtrado = df.copy()
     if estados:
         df_filtrado = df_filtrado[df_filtrado["Estado"].isin(estados)]
@@ -132,6 +222,7 @@ def atualizar_graficos(estados, periodos):
     if "EPS Previstos (Fase Inicial)" in df_filtrado.columns:
         df_eps = df_filtrado[df_filtrado["EPS Previstos (Fase Inicial)"].notna()]
         df_eps = df_eps.groupby("Período")["EPS Previstos (Fase Inicial)"].sum().reset_index()
+
         fig2 = px.line(df_eps, x="Período", y="EPS Previstos (Fase Inicial)",
                        markers=True, title="EPS Previstos por Período",
                        color_discrete_sequence=["#0056b3"])
@@ -153,9 +244,6 @@ def atualizar_graficos(estados, periodos):
     Input("filtro-periodo", "value")
 )
 def exportar_excel(estados, periodos):
-    if df.empty:
-        return ""
-
     df_filtrado = df.copy()
     if estados:
         df_filtrado = df_filtrado[df_filtrado["Estado"].isin(estados)]
@@ -170,83 +258,6 @@ def exportar_excel(estados, periodos):
     encoded = base64.b64encode(buffer.read()).decode()
     return f"data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{encoded}"
 
-def coletar_dados():
-    print("\U0001f504 Iniciando coleta de dados...")
-    API_TOKEN = os.getenv("eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJQaXBlZnkiLCJpYXQiOjE3NDI5MDczMTAsImp0aSI6ImZiOTQzNmNiLWUyZjYtNDcwNy1iODZjLTEzODE3ZTMxOTU2MiIsInN1YiI6MzA1ODYwNjQ0LCJ1c2VyIjp7ImlkIjozMDU4NjA2NDQsImVtYWlsIjoidml0b3IuZnJhbmNvQHNlcmdlcy5vcmcifX0.lbFXscA19fn2_XUT-QdT2DuJBRMxyDArQ03CRNgDkTXicsC-9ii1gl5DFjrA49_2tGUyPZmEhMJlw8mQNgy9Hg") or ""
-    url = "https://api.pipefy.com/graphql"
-    headers = {"Authorization": f"Bearer {API_TOKEN}"}
-    fases = [
-        {"id": 334867668, "name": "Em Aberto"},
-        {"id": 334867669, "name": "Em Captação"},
-        {"id": 334867674, "name": "Cadastro Médico"},
-        {"id": 334867670, "name": "Aguardando Agenda"},
-        {"id": 334867673, "name": "Confirmação CEF"},
-        {"id": 334867671, "name": "Aguardando/Em Atendimento"},
-        {"id": 334867678, "name": "Cancelado/Reagendado"},
-        {"id": 334867672, "name": "Atendimento Realizado"},
-        {"id": 334867677, "name": "Conferência do Atendimento"},
-        {"id": 334867683, "name": "Liberado para Pagamento"},
-        {"id": 334867675, "name": "NF Solicitada"},
-        {"id": 334867679, "name": "NF recebida"},
-        {"id": 334867680, "name": "Pagamento realizado"},
-        {"id": 334867676, "name": "Excluído da Previsão"},
-    ]
-
-    registros = []
-    for fase in fases:
-        print(f"\U0001f50d Coletando fase: {fase['name']}")
-        has_next_page = True
-        end_cursor = None
-
-        while has_next_page:
-            after = f', after: "{end_cursor}"' if end_cursor else ''
-            query = f"""
-            {{
-              phase(id: {fase['id']}) {{
-                name
-                cards(first: 100{after}) {{
-                  pageInfo {{ hasNextPage endCursor }}
-                  edges {{
-                    node {{
-                      title
-                      createdAt
-                      current_phase {{ name }}
-                      fields {{ name value }}
-                    }}
-                  }}
-                }}
-              }}
-            }}"""
-            r = requests.post(url, json={"query": query}, headers=headers)
-            cards = r.json()["data"]["phase"]["cards"]
-            for edge in cards["edges"]:
-                node = edge["node"]
-                registro = {
-                    "Título": node["title"],
-                    "Fase Atual": node["current_phase"]["name"],
-                    "Fase de Origem": fase["name"]
-                }
-                for campo in node["fields"]:
-                    nome, valor = campo["name"], campo["value"]
-                    registro[nome] = valor
-                    if nome == "EPS Previstos":
-                        try:
-                            registro["EPS Previstos (Fase Inicial)"] = float(valor)
-                        except:
-                            registro["EPS Previstos (Fase Inicial)"] = None
-                registros.append(registro)
-            has_next_page = cards["pageInfo"]["hasNextPage"]
-            end_cursor = cards["pageInfo"]["endCursor"]
-        print(f"✅ Fase coletada: {fase['name']}")
-
-    print(f"\n✅ Total geral de cards coletados: {len(registros)}")
-    df_final = pd.DataFrame(registros)
-    for col in ["EPS Previstos", "EPS Realizados", "EPS Previstos (Fase Inicial)"]:
-        if col in df_final.columns:
-            df_final[col] = pd.to_numeric(df_final[col], errors="coerce")
-    return df_final
-
 if __name__ == "__main__":
-    df = coletar_dados()
     port = int(os.environ.get("PORT", 8050))
     app.run(host="0.0.0.0", port=port)
