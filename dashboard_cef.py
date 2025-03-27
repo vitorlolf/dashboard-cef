@@ -253,6 +253,10 @@ app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.BOOTSTRAP]
 app.title = "Meu App"
 server = app.server
 
+import os
+
 if __name__ == "__main__":
-    print("✅ Iniciando dashboard com login...")
-    app.run(debug=True)
+    print("Iniciando Dashboard...")
+    port = int(os.environ.get("PORT", 8050))
+    app.run(host="0.0.0.0", port=port)
+
