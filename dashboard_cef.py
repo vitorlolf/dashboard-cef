@@ -249,6 +249,10 @@ def exportar_excel(estados, periodos):
     encoded = base64.b64encode(buffer.read()).decode()
     return f"data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{encoded}"
 
+app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app.title = "Meu App"
+server = app.server
+
 if __name__ == "__main__":
     print("✅ Iniciando dashboard com login...")
     app.run(debug=True)
