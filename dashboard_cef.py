@@ -112,56 +112,82 @@ app.layout = html.Div([
     html.Div(id='pagina-conteudo', children=layout_login)
 ])
 
-layout_dashboard = html.Div([
-    html.Div([
-        html.H1("DASHBOARD - EPS CEF 2025", style={"textAlign": "center", "color": "white"}),
-        html.Div(
-            html.A("📥 Baixar Excel", id="download-link", download="dados_filtrados.xlsx", href="", target="_blank",
-                   style={
-                       "padding": "8px 16px",
-                       "backgroundColor": "#1e1e1e",
-                       "border": "1px solid white",
-                       "color": "white",
-                       "fontWeight": "bold",
-                       "borderRadius": "6px",
-                       "textDecoration": "none",
-                       "transition": "0.3s"
-                   }),
-            style={"position": "absolute", "top": "10px", "right": "30px"}
-        )
-    ], style={"position": "relative"}),
-
-    html.Div([
-        dash_table.DataTable(
-            id='tabela-dados',
-            columns=[{"name": i, "id": i} for i in df.columns if i not in ["Data de Criação"]],
-            data=df.to_dict('records'),
-            page_size=10,
-            filter_action="native",
-            style_table={"overflowX": "auto"},
-            style_header={"backgroundColor": "#333", "color": "white", "fontWeight": "bold"},
-            style_cell={"backgroundColor": "#1e1e1e", "color": "white", "textAlign": "left"}
-        ),
-        html.Br(),
-        html.Div([
-            html.Div([
-                html.Label("PERÍODO", style={"fontWeight": "bold", "textTransform": "uppercase", "color": "white", "fontSize": "12px"}),
-                dcc.Dropdown(id="filtro-periodo", options=[{"label": p, "value": p} for p in sorted(df["Período"].dropna().unique())] if "Período" in df.columns else [], multi=True, style={"fontSize": "12px"})
-            ], style={"width": "200px", "margin": "0 10px"}),
-
-            html.Div([
-                html.Label("REGIÃO", style={"fontWeight": "bold", "textTransform": "uppercase", "color": "white", "fontSize": "12px"}),
-                dcc.Dropdown(id="filtro-estado", options=[{"label": e, "value": e} for e in sorted(df["Estado"].dropna().unique())] if "Estado" in df.columns else [], multi=True, style={"fontSize": "12px"})
-            ], style={"width": "200px", "margin": "0 10px"})
-        ], style={"display": "flex", "justifyContent": "center"})
+layout_dashboard = dbc.Container([
+    dbc.Row([
+        dbc.Col(html.H1("DASHBOARD - EPS CEF 2025", className="text-center text-white mb-4"), width=12)
     ]),
 
-    html.Br(),
-    dcc.Graph(id="grafico-fases", style={"transform": "scale(0.95)", "transformOrigin": "top"}),
-    html.Div(id="porcentagem-info", style={"color": "white", "textAlign": "center", "marginBottom": "40px"}),
-    dcc.Graph(id="grafico-eps", style={"transform": "scale(0.95)", "transformOrigin": "top"})
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardHeader("Filtros", className="bg-primary text-white"),
+                dbc.CardBody([
+                    dbc.Row([
+                        dbc.Col([
+                            html.Label("PERÍODO", className="text-white fw-bold text-uppercase small"),
+                            dcc.Dropdown(id="filtro-periodo", options=[{"label": p, "value": p} for p in sorted(df["Período"].dropna().unique())] if "Período" in df.columns else [], multi=True, className="mb-2")
+                        ], md=6),
 
-], style={"backgroundColor": "#1e1e1e", "padding": "20px"})
+                        dbc.Col([
+                            html.Label("REGIÃO", className="text-white fw-bold text-uppercase small"),
+                            dcc.Dropdown(id="filtro-estado", options=[{"label": e, "value": e} for e in sorted(df["Estado"].dropna().unique())] if "Estado" in df.columns else [], multi=True, className="mb-2")
+                        ], md=6)
+                    ])
+                ])
+            ])
+        ])
+    ], className="mb-4"),
+
+    dbc.Row([
+        dbc.Col([
+            dbc.Button("📅 Baixar Excel", id="download-link", color="dark", className="mb-3", href="", target="_blank")
+        ], className="d-flex justify-content-end")
+    ]),
+
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardHeader("Distribuição por Status dos Cards", className="bg-secondary text-white"),
+                dbc.CardBody([
+                    dcc.Graph(id="grafico-fases")
+                ])
+            ])
+        ])
+    ], className="mb-4"),
+
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardHeader("EPS Previstos por Período", className="bg-secondary text-white"),
+                dbc.CardBody([
+                    dcc.Graph(id="grafico-eps"),
+                    html.Div(id="porcentagem-info", className="text-white text-center mt-3")
+                ])
+            ])
+        ])
+    ], className="mb-4"),
+
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardHeader("Tabela Detalhada", className="bg-secondary text-white"),
+                dbc.CardBody([
+                    dash_table.DataTable(
+                        id='tabela-dados',
+                        columns=[{"name": i, "id": i} for i in df.columns if i not in ["Data de Criação"]],
+                        data=df.to_dict('records'),
+                        page_size=10,
+                        filter_action="native",
+                        style_table={"overflowX": "auto"},
+                        style_header={"backgroundColor": "#343a40", "color": "white", "fontWeight": "bold"},
+                        style_cell={"backgroundColor": "#1e1e1e", "color": "white", "textAlign": "left"}
+                    )
+                ])
+            ])
+        ])
+    ])
+
+], fluid=True, className="bg-dark p-4")
 
 @app.callback(
     Output("pagina-conteudo", "children"),
