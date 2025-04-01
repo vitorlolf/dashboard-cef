@@ -107,50 +107,20 @@ df = coletar_dados()
 app = Dash(__name__, external_stylesheets=[dbc.themes.CYBORG], suppress_callback_exceptions=True)
 server = app.server
 
+app.layout = html.Div([
+    dcc.Location(id='url'),
+    html.Div(id='pagina-conteudo', children=layout_login)
+])
+
 layout_dashboard = dbc.Container([
     dbc.Row([
-        dbc.Col(html.H2("\U0001F4CA ACOMPANHAMENTO EPS - 2025",
-                        className="text-center text-primary mb-4 fw-bold"), width=12)
+        dbc.Col(html.H2("ACOMPANHAMENTO EPS - 2025", className="text-center text-info mb-4 fw-bold", style={"fontSize": "28px"}))
     ]),
 
     dbc.Row([
         dbc.Col([
             dbc.Card([
-                dbc.CardHeader("Filtros", className="bg-secondary text-white"),
-                dbc.CardBody([
-                    dbc.Row([
-                        dbc.Col([
-                            html.Label("Período", className="fw-bold text-light"),
-                            dcc.Dropdown(
-                                id="filtro-periodo",
-                                options=[{"label": p, "value": p} for p in sorted(df["Período"].dropna().unique())] if "Período" in df.columns else [],
-                                multi=True,
-                                className="text-dark"
-                            )
-                        ], md=4),
-                        dbc.Col([
-                            html.Label("Região", className="fw-bold text-light"),
-                            dcc.Dropdown(
-                                id="filtro-estado",
-                                options=[{"label": e, "value": e} for e in sorted(df["Estado"].dropna().unique())] if "Estado" in df.columns else [],
-                                multi=True,
-                                className="text-dark"
-                            )
-                        ], md=4),
-                        dbc.Col([
-                            html.Label(" ", className="d-none d-md-block"),
-                            dbc.Button("\U0001F4C5 Baixar Excel", id="download-link", color="primary", className="w-100", href="", target="_blank")
-                        ], md=4)
-                    ])
-                ])
-            ])
-        ])
-    ], className="mb-4"),
-
-    dbc.Row([
-        dbc.Col([
-            dbc.Card([
-                dbc.CardHeader("Tabela Detalhada", className="bg-secondary text-white"),
+                dbc.CardHeader("Tabela Detalhada", className="bg-dark text-white"),
                 dbc.CardBody([
                     dash_table.DataTable(
                         id='tabela-dados',
@@ -158,8 +128,8 @@ layout_dashboard = dbc.Container([
                         data=df.to_dict('records'),
                         page_size=10,
                         filter_action="native",
-                        style_table={"overflowX": "auto"},
-                        style_header={"backgroundColor": "#343a40", "color": "white", "fontWeight": "bold"},
+                        style_table={"overflowX": "auto", "maxWidth": "100%"},
+                        style_header={"backgroundColor": "#2c2f33", "color": "white", "fontWeight": "bold"},
                         style_cell={"backgroundColor": "#1e1e1e", "color": "white", "textAlign": "left"},
                         style_filter={"backgroundColor": "#2c2f33", "color": "white"}
                     )
@@ -171,22 +141,53 @@ layout_dashboard = dbc.Container([
     dbc.Row([
         dbc.Col([
             dbc.Card([
-                dbc.CardHeader("Distribuição por Status dos Cards", className="bg-secondary text-white"),
-                dbc.CardBody([dcc.Graph(id="grafico-fases")])
-            ])
-        ], md=6),
+                dbc.CardBody([
+                    dbc.Row([
+                        dbc.Col([
+                            html.Label("PERÍODO", className="fw-bold text-uppercase text-light small"),
+                            dcc.Dropdown(id="filtro-periodo", options=[{"label": p, "value": p} for p in sorted(df["Período"].dropna().unique())] if "Período" in df.columns else [], multi=True)
+                        ], md=4),
 
-        dbc.Col([
-            dbc.Card([
-                dbc.CardHeader("EPS Previstos por Período", className="bg-secondary text-white"),
-                dbc.CardBody([dcc.Graph(id="grafico-eps")])
+                        dbc.Col([
+                            html.Label("REGIÃO", className="fw-bold text-uppercase text-light small"),
+                            dcc.Dropdown(id="filtro-estado", options=[{"label": e, "value": e} for e in sorted(df["Estado"].dropna().unique())] if "Estado" in df.columns else [], multi=True)
+                        ], md=4),
+
+                        dbc.Col([
+                            html.Label("", className="d-none d-md-block"),
+                            dbc.Button("\U0001F4C5 Baixar Excel", id="download-link", color="info", className="w-100", href="", target="_blank")
+                        ], md=4, className="d-flex align-items-end justify-content-end")
+                    ])
+                ], className="bg-secondary")
             ])
-        ], md=6)
+        ])
     ], className="mb-4"),
 
     dbc.Row([
         dbc.Col([
-            html.Div(id="porcentagem-info", className="text-center text-light fs-5")
+            dbc.Card([
+                dbc.CardHeader("Distribuição por Status dos Cards", className="bg-dark text-white"),
+                dbc.CardBody([
+                    dcc.Graph(id="grafico-fases")
+                ])
+            ])
+        ])
+    ], className="mb-4"),
+
+    dbc.Row([
+        dbc.Col([
+            html.Div(id="porcentagem-info", className="text-center text-light mb-4")
+        ])
+    ]),
+
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardHeader("EPS Previstos por Período", className="bg-dark text-white"),
+                dbc.CardBody([
+                    dcc.Graph(id="grafico-eps")
+                ])
+            ])
         ])
     ])
 
