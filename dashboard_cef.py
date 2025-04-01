@@ -104,6 +104,9 @@ def coletar_dados():
 
 df = coletar_dados()
 
+app = Dash(__name__, external_stylesheets=[dbc.themes.CYBORG], suppress_callback_exceptions=True)
+server = app.server
+
 layout_dashboard = dbc.Container([
     dbc.Row([
         dbc.Col(html.H2("\U0001F4CA ACOMPANHAMENTO EPS - 2025",
